@@ -1,12 +1,11 @@
 import WindowManager from './WindowManager.js'
 
-
-
-const t = THREE;
+const t = window.THREE;
 let camera, scene, renderer, world;
 let near, far;
 let pixR = window.devicePixelRatio ? window.devicePixelRatio : 1;
-let cubes = [];
+let spheres = [];
+let glittles = [];
 let sceneOffsetTarget = {x: 0, y: 0};
 let sceneOffset = {x: 0, y: 0};
 
@@ -27,14 +26,12 @@ function getTime ()
 	return (new Date().getTime() - today) / 1000.0;
 }
 
-
 if (new URLSearchParams(window.location.search).get("clear"))
 {
 	localStorage.clear();
 }
 else
 {	
-	// this code is essential to circumvent that some browsers preload the content of some pages before you actually hit the url
 	document.addEventListener("visibilitychange", () => 
 	{
 		if (document.visibilityState != 'hidden' && !initialized)
@@ -52,22 +49,30 @@ else
 
 	function init ()
 	{
-		initialized = true;
+		try {
+			console.log("Init called");
+			initialized = true;
 
-		// add a short timeout because window.offsetX reports wrong values before a short period 
-		setTimeout(() => {
-			setupScene();
-			setupWindowManager();
-			resize();
-			updateWindowShape(false);
-			render();
-			window.addEventListener('resize', resize);
-		}, 500)	
+			setTimeout(() => {
+				try {
+					setupScene();
+					setupWindowManager();
+					resize();
+					updateWindowShape(false);
+					render();
+					window.addEventListener('resize', resize);
+				} catch (e) {
+					console.error("Error during setup and render:", e);
+				}
+			}, 500);
+		} catch (e) {
+			console.error("Error during init:", e);
+		}
 	}
 
 	function setupScene ()
 	{
-		camera = new t.OrthographicCamera(0, 0, window.innerWidth, window.innerHeight, -10000, 10000);
+		camera = new t.OrthographicCamera(0, window.innerWidth, window.innerHeight, 0, -10000, 10000);
 		
 		camera.position.z = 2.5;
 		near = camera.position.z - .5;
@@ -75,7 +80,8 @@ else
 
 		scene = new t.Scene();
 		scene.background = new t.Color(0.0);
-		scene.add( camera );
+		// Remove adding camera to scene, as it's not needed and may cause issues
+		// scene.add( camera );
 
 		renderer = new t.WebGLRenderer({antialias: true, depthBuffer: true});
 		renderer.setPixelRatio(pixR);
@@ -93,104 +99,183 @@ else
 		windowManager.setWinShapeChangeCallback(updateWindowShape);
 		windowManager.setWinChangeCallback(windowsUpdated);
 
-		// here you can add your custom metadata to each windows instance
 		let metaData = {foo: "bar"};
 
-		// this will init the windowmanager and add this window to the centralised pool of windows
 		windowManager.init(metaData);
 
-		// call update windows initially (it will later be called by the win change callback)
 		windowsUpdated();
 	}
 
 	function windowsUpdated ()
 	{
-		updateNumberOfCubes();
+		updateNumberOfSpheres();
 	}
 
-	function updateNumberOfCubes ()
+	// Glittle class representing small particles around each sphere
+	class Glittle {
+		constructor(parentSphere, angle, radius) {
+			this.parentSphere = parentSphere;
+			this.angle = angle;
+			this.radius = radius;
+			this.position = new t.Vector3();
+			this.mesh = new t.Mesh(
+				new t.SphereGeometry(5, 8, 8),
+				new t.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })
+			);
+			world.add(this.mesh);
+		}
+
+		update(targetPos) {
+			// Slowly follow the target position with some lag
+			this.position.x += (targetPos.x - this.position.x) * 0.05;
+			this.position.y += (targetPos.y - this.position.y) * 0.05;
+
+			// Calculate position around the parent sphere in a circular orbit
+			this.angle += 0.01;
+			this.position.x += Math.cos(this.angle) * this.radius;
+			this.position.y += Math.sin(this.angle) * this.radius;
+
+			this.mesh.position.set(this.position.x, this.position.y, 0);
+		}
+
+		remove() {
+			world.remove(this.mesh);
+		}
+	}
+
+	function updateNumberOfSpheres ()
 	{
 		let wins = windowManager.getWindows();
 
-		// remove all cubes
-		cubes.forEach((c) => {
-			world.remove(c);
-		})
+		// Remove all spheres and glittles
+		spheres.forEach((s) => {
+			world.remove(s.mesh);
+			s.glittles.forEach(g => g.remove());
+		});
+		spheres = [];
+		glittles = [];
 
-		cubes = [];
-
-		// add new cubes based on the current window setup
+		// Add new spheres based on the current window setup
 		for (let i = 0; i < wins.length; i++)
 		{
 			let win = wins[i];
 
-			let c = new t.Color();
-			c.setHSL(i * .1, 1.0, .5);
+			let color = new t.Color();
+			color.setHSL(i * .1, 1.0, .5);
 
-			let s = 100 + i * 50;
-			let cube = new t.Mesh(new t.BoxGeometry(s, s, s), new t.MeshBasicMaterial({color: c , wireframe: true}));
-			cube.position.x = win.shape.x + (win.shape.w * .5);
-			cube.position.y = win.shape.y + (win.shape.h * .5);
+			let size = 50 + i * 20;
+			let sphereMesh = new t.Mesh(
+				new t.SphereGeometry(size, 32, 32),
+				new t.MeshBasicMaterial({color: color, wireframe: true})
+			);
 
-			world.add(cube);
-			cubes.push(cube);
+			sphereMesh.position.x = win.shape.x + (win.shape.w * .5);
+			sphereMesh.position.y = win.shape.y + (win.shape.h * .5);
+
+			world.add(sphereMesh);
+
+			// Create glittles around the sphere
+			let sphere = {
+				mesh: sphereMesh,
+				glittles: []
+			};
+
+			let glittleCount = 10;
+			for (let j = 0; j < glittleCount; j++) {
+				let angle = (j / glittleCount) * Math.PI * 2;
+				let radius = size + 20 + Math.random() * 10;
+				let glittle = new Glittle(sphere, angle, radius);
+				glittle.position.x = sphereMesh.position.x + Math.cos(angle) * radius;
+				glittle.position.y = sphereMesh.position.y + Math.sin(angle) * radius;
+				sphere.glittles.push(glittle);
+				glittles.push(glittle);
+			}
+
+			spheres.push(sphere);
 		}
 	}
 
 	function updateWindowShape (easing = true)
 	{
-		// storing the actual offset in a proxy that we update against in the render function
 		sceneOffsetTarget = {x: -window.screenX, y: -window.screenY};
 		if (!easing) sceneOffset = sceneOffsetTarget;
 	}
 
-
 	function render ()
 	{
-		let t = getTime();
+		try {
+			console.log("Render called");
+			let t = getTime();
 
-		windowManager.update();
+			windowManager.update();
 
+			let falloff = .05;
+			sceneOffset.x = sceneOffset.x + ((sceneOffsetTarget.x - sceneOffset.x) * falloff);
+			sceneOffset.y = sceneOffset.y + ((sceneOffsetTarget.y - sceneOffset.y) * falloff);
 
-		// calculate the new position based on the delta between current offset and new offset times a falloff value (to create the nice smoothing effect)
-		let falloff = .05;
-		sceneOffset.x = sceneOffset.x + ((sceneOffsetTarget.x - sceneOffset.x) * falloff);
-		sceneOffset.y = sceneOffset.y + ((sceneOffsetTarget.y - sceneOffset.y) * falloff);
+			world.position.x = sceneOffset.x;
+			world.position.y = sceneOffset.y;
 
-		// set the world position to the offset
-		world.position.x = sceneOffset.x;
-		world.position.y = sceneOffset.y;
+			let wins = windowManager.getWindows();
 
-		let wins = windowManager.getWindows();
+			// Update spheres positions and rotations
+			for (let i = 0; i < spheres.length; i++)
+			{
+				let sphere = spheres[i];
+				let win = wins[i];
+				let _t = t;
 
+				let posTarget = {x: win.shape.x + (win.shape.w * .5), y: win.shape.y + (win.shape.h * .5)};
 
-		// loop through all our cubes and update their positions based on current window positions
-		for (let i = 0; i < cubes.length; i++)
-		{
-			let cube = cubes[i];
-			let win = wins[i];
-			let _t = t;// + i * .2;
+				sphere.mesh.position.x += (posTarget.x - sphere.mesh.position.x) * falloff;
+				sphere.mesh.position.y += (posTarget.y - sphere.mesh.position.y) * falloff;
+				sphere.mesh.rotation.x = _t * .5;
+				sphere.mesh.rotation.y = _t * .3;
 
-			let posTarget = {x: win.shape.x + (win.shape.w * .5), y: win.shape.y + (win.shape.h * .5)}
+				// Update glittles around the sphere
+				sphere.glittles.forEach(glittle => {
+					// Glittle target position is around the sphere center with some orbit
+			let orbitCenter = new THREE.Vector3(sphere.mesh.position.x, sphere.mesh.position.y, 0);
+			glittle.update(orbitCenter);
+				});
+			}
 
-			cube.position.x = cube.position.x + (posTarget.x - cube.position.x) * falloff;
-			cube.position.y = cube.position.y + (posTarget.y - cube.position.y) * falloff;
-			cube.rotation.x = _t * .5;
-			cube.rotation.y = _t * .3;
-		};
+			// Interaction between glittles of different spheres (simple attraction if close)
+			for (let i = 0; i < spheres.length; i++) {
+				for (let j = i + 1; j < spheres.length; j++) {
+					let sphereA = spheres[i];
+					let sphereB = spheres[j];
 
-		renderer.render(scene, camera);
-		requestAnimationFrame(render);
+					sphereA.glittles.forEach(glittleA => {
+						sphereB.glittles.forEach(glittleB => {
+			let dist = glittleA.position.distanceTo(glittleB.position);
+							if (dist < 30) {
+								// Simple attraction: move glittles slightly towards each other
+							let dir = new THREE.Vector3().subVectors(glittleB.position, glittleA.position).normalize();
+								glittleA.position.addScaledVector(dir, 0.5);
+								glittleB.position.addScaledVector(dir.negate(), 0.5);
+
+								glittleA.mesh.position.copy(glittleA.position);
+								glittleB.mesh.position.copy(glittleB.position);
+							}
+						});
+					});
+				}
+			}
+
+			renderer.render(scene, camera);
+			requestAnimationFrame(render);
+		} catch (e) {
+			console.error("Error during render:", e);
+		}
 	}
 
-
-	// resize the renderer to fit the window size
 	function resize ()
 	{
 		let width = window.innerWidth;
-		let height = window.innerHeight
+		let height = window.innerHeight;
 		
-		camera = new t.OrthographicCamera(0, width, 0, height, -10000, 10000);
+		camera = new t.OrthographicCamera(0, width, height, 0, -10000, 10000);
 		camera.updateProjectionMatrix();
 		renderer.setSize( width, height );
 	}

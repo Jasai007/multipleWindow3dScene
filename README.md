@@ -1,41 +1,77 @@
-# Multiple Window 3D Scene using Three.js
+# Multiple Window 3D Scene with Three.js
 
-## Introduction
-This project demonstrates a unique approach to creating and managing a 3D scene across multiple browser windows using Three.js and localStorage. It's designed for developers interested in advanced web graphics and window management techniques.
+## Overview
 
-## Features
-- 3D scene creation and rendering with Three.js.
-- Synchronization of 3D scenes across multiple browser windows.
-- Dynamic window management and state synchronization using localStorage.
+This project demonstrates a synchronized 3D visualization of multiple browser windows using Three.js and localStorage. Each browser window is represented as a sphere in a 3D scene, with small orbiting particles ("glittles") around it. The glittles follow the window movement with a trailing effect and interact with glittles of nearby windows, creating a dynamic effect reminiscent of a cell nucleus.
 
-## Installation
-Clone the repository and open `index.html` in your browser to start exploring the 3D scene.
+## What the Project Does
 
-```
-git clone https://github.com/bgstaal/multipleWindow3dScene
-```
-## Usage
-The main application logic is contained within `main.js` and `WindowManager.js`. The 3D scene is rendered in `index.html`, which serves as the entry point of the application.
+- Uses Three.js to render a 3D scene with spheres representing each open browser window.
+- Manages multiple windows using a `WindowManager` class that tracks window positions and sizes, synchronizing state across windows via localStorage.
+- Adds small particles ("glittles") orbiting each sphere, which follow the window movement smoothly.
+- Implements interaction between glittles of nearby spheres, creating an attractive effect.
+- Adjusts the scene offset based on the current window's screen position for a smooth visual effect.
 
-## Structure and Components
-- `index.html`: Entry point that sets up the HTML structure and includes the Three.js library and the main script.
-- `WindowManager.js`: Core class managing window creation, synchronization, and state management across multiple windows.
-- `main.js`: Contains the logic for initializing the 3D scene, handling window events, and rendering the scene.
-- `three.r124.min.js`: Minified version of the Three.js library used for 3D graphics rendering.
+## How It Works
 
-## Detailed Functionality
-- `WindowManager.js` handles the lifecycle of multiple browser windows, including creation, synchronization, and removal. It uses localStorage to maintain state across windows.
-- `main.js` initializes the 3D scene using Three.js, manages the window's resize events, and updates the scene based on window interactions.
+1. **WindowManager**: Tracks all open windows, their positions, and sizes. It listens for changes in localStorage to synchronize window states across all windows and removes window data when a window closes.
 
-## Contributing
-Contributions to enhance or expand the project are welcome. Feel free to fork the repository, make changes, and submit pull requests.
+2. **Three.js Scene**: Initialized with an orthographic camera and WebGL renderer. The scene contains spheres representing windows and glittles orbiting around them.
 
-## License
-This project is open-sourced under the MIT License.
+3. **Rendering Loop**: Continuously updates the positions and rotations of spheres and glittles based on window states and time. Glittles orbit their parent sphere with a lagging trailing effect.
 
-## Acknowledgments
-- The Three.js team for their comprehensive 3D library.
-- x.com/didntdrinkwater for this readme.
+4. **Glittle Interaction**: When two spheres come close, their glittles attract each other slightly, simulating interaction similar to a cell nucleus.
 
-## Contact
-For more information and updates, follow [@_nonfigurativ_](https://twitter.com/_nonfigurativ_) on Twitter.
+5. **Scene Offset**: The entire 3D scene is offset based on the current window's screen position to create a smooth movement effect.
+
+## What We Achieved
+
+- Replaced the original cubes with spheres to better represent windows.
+- Added orbiting particles ("glittles") around each sphere with smooth trailing movement.
+- Implemented interaction between glittles of nearby spheres.
+- Fixed rendering issues related to camera setup and script loading.
+- Resolved CORS issues by serving the project via a local HTTP server.
+- Added error handling and debugging logs to identify and fix runtime errors.
+
+## Problems Encountered and Solutions
+
+- **CORS Policy Error**: Loading module scripts directly from the file system caused CORS errors. Solution: Serve the project using a local HTTP server (e.g., Python's `http.server`).
+
+- **Camera Setup Issues**: Incorrect orthographic camera parameters caused a white screen. Solution: Corrected camera parameters and removed adding the camera to the scene.
+
+- **Duplicate Imports**: Duplicate import statements caused syntax errors. Solution: Removed duplicate imports.
+
+- **Vector3 Constructor Error**: Using an incorrect alias for `Vector3` caused runtime errors. Solution: Replaced all `t.Vector3` with `THREE.Vector3` and ensured correct referencing of the Three.js global.
+
+- **General Debugging**: Added try-catch blocks and console logs to trace initialization and rendering steps.
+
+## How to Run
+
+1. Serve the project directory using a local HTTP server. For example, using Python:
+
+   ```bash
+   python -m http.server
+   ```
+
+2. Open your browser and navigate to:
+
+   ```
+   http://localhost:8000/index.html
+   ```
+
+3. Open multiple windows or tabs of the same page to see the synchronized 3D spheres and glittles representing each window.
+
+## Dependencies
+
+- [Three.js r124](https://threejs.org/) (included as `three.r124.min.js`)
+
+## File Structure
+
+- `index.html`: Entry point loading Three.js and main.js.
+- `main.js`: Main script initializing the 3D scene, managing spheres and glittles, and rendering.
+- `WindowManager.js`: Manages multiple browser windows and synchronizes their states via localStorage.
+- `three.r124.min.js`: Three.js library.
+
+---
+
+This project showcases advanced web graphics and window management techniques by combining Three.js rendering with localStorage-based synchronization across multiple browser windows.
